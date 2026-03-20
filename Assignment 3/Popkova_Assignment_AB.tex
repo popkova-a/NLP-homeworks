@@ -1,0 +1,215 @@
+\documentclass[10pt,a4paper]{article}
+
+% ---------- Page + columns ----------
+\usepackage[a4paper,margin=1in]{geometry}
+\setlength{\columnsep}{0.28in}
+
+% ---------- Fonts / typesetting ----------
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{newtxtext,newtxmath} % Times-like look (close to your PDF)
+\usepackage{microtype}
+
+% ---------- Graphics / tables ----------
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{xcolor}
+\usepackage{colortbl}
+
+% ---------- Lists / spacing ----------
+\usepackage{enumitem}
+\setlist{nosep}
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{0.55em}
+
+% ---------- Headings ----------
+\usepackage{titlesec}
+\renewcommand{\thesection}{\arabic{section}}
+\renewcommand{\thesubsection}{\thesection.\arabic{subsection}}
+
+\titleformat{\section}
+  {\normalsize}
+  {\textbf{\thesection}.}
+  {0.6em}
+  {}
+\titlespacing*{\section}{0pt}{0.9em}{0.35em}
+
+\titleformat{\subsection}
+  {\bfseries\itshape\normalsize}
+  {\thesubsection}
+  {0.6em}
+  {}
+\titlespacing*{\subsection}{0pt}{0.55em}{0.15em}
+
+% ---------- Abstract box ----------
+\usepackage[most]{tcolorbox}
+\newtcolorbox{abstractbox}{
+  colback=black!10,
+  colframe=black!10,
+  boxrule=0pt,
+  left=8pt,right=8pt,top=7pt,bottom=7pt,
+  arc=0pt,
+}
+
+% ---------- Captions ----------
+\usepackage[font=small,labelfont=bf]{caption}
+
+% ---------- Header/footer ----------
+\usepackage{fancyhdr}
+\pagestyle{fancy}
+\fancyhf{}
+\renewcommand{\headrulewidth}{0pt}
+
+% Style for pages after the first (simple)
+\fancyhead[L]{\emph{GloVe: Global Vectors for Word Representation \cite{glove2014}}}
+\fancyhead[R]{\thepage}
+
+% First page header with course text + logo (logo optional)
+\fancypagestyle{firstpage}{
+  \fancyhf{}
+  \renewcommand{\headrulewidth}{0pt}
+  \fancyhead[L]{\small Machine Learning for Natural Language Processing 1 (FS2025)}
+  \fancyhead[R]{%
+    % Put a logo file next to your .tex, e.g. uzh_logo.png/pdf
+    % If you don't have it, comment the next line out.
+    \includegraphics[height=30pt]{uzh_logo}
+  }
+}
+
+% ---------- Links ----------
+\usepackage[colorlinks=true,citecolor=blue,linkcolor=blue,urlcolor=blue]{hyperref}
+
+% ---------- Needed for full-width block before 2 columns ----------
+\makeatletter
+
+\begin{document}
+\thispagestyle{firstpage}
+
+% Full-width title/abstract block, then flow into 2 columns on SAME page:
+\twocolumn[
+\begin{@twocolumnfalse}
+
+{\bfseries\large PAPER DISSECTION}\vspace{0.5cm}
+
+{\LARGE\bfseries GloVe: Global Vectors for Word Representation \cite{glove2014}\par}
+\vspace{0.5cm}
+
+{\bfseries Anastasia Popkova\par}
+{\small University of Zurich, Switzerland\par}
+
+\vspace{0.8em}
+
+\vspace{1cm}
+\end{@twocolumnfalse}
+]
+
+\renewcommand{\refname}{\textbf{References}}
+
+\section{\textbf{Abstract} \\ \textit{What is it about?}}
+GloVe is an unsupervised learning algorithm for producing dense vector representations of words. It is a global log-bilinear regression model that aims to combine two major approaches in the literature: global matrix factorization and local context-window methods. As a result, the learned embedding space exhibits meaningful linear structure and achieves strong performance on standard word similarity and named entity recognition benchmarks, as well as on the word analogy dataset. This paper dissection briefly describes the machine learning methods behind GloVe, highlights its main innovations and summarizes key takeaways and limitations.
+
+\section{\textbf{Problem Statement} \\ \textit{What problem does it try to solve?}}
+There exist two prominent families of methods for learning word vectors: (i) global matrix factorization approaches, such as latent semantic analysis (LSA) \cite{deerwester1990}, and (ii) local context window approaches, such as the skip-gram model \cite{mikolov2013efficient}. Each family has notable limitations.
+
+Although techniques like LSA efficiently exploit corpus-wide co-occurrence statistics, they tend to perform poorly on word-analogy task \cite{mikolov2013linguistic}. Classic analogies such as "king is to queen as man is to woman" are well captured by the approximately linear structure of the vector space, e.g.
+\[
+\texttt{king} - \texttt{queen} \approx \texttt{man} - \texttt{woman},
+\]
+or equivalently \(\texttt{king} - \texttt{man} + \texttt{woman} \approx \texttt{queen}\). A related issue is that raw co-occurrence statistics can be dominated by very frequent function words (e.g. "the", "and"), which may disproportionately influence similarity unless appropriately reweighted.
+
+Local context window methods often perform better on the analogy task, but they do not optimize directly over aggregated co-occurrence counts. Instead, they learn by repeatedly scanning many overlapping context windows in the corpus and making updates per observed (target, context) pair. This can lead to substantial redundant computation, since repeated co-occurrences are processed many times rather than being consolidated into a single global statistic.
+
+The goal of the paper, therefore, is to learn word vectors that (i) directly capture the global corpus statistics and (ii) yield an embedding space with meaningful substructure that supports analogical reasoning.
+
+\section{\textbf{Motivation} \\ \textit{Why is it interesting?}}
+ GloVe offers several appealing properties for NLP. First, it scales well from small to very large datasets, and its training can be efficiently parallelized across multiple machines. Second, it remains competitive across a wide range of embedding dimensionalities, delivering strong results with both low- and high-dimensional vectors. Third, it has been shown to benefit substantially from training on very large corpora (e.g. a 42B-token corpus), whereas simply increasing dataset size does not consistently improve performance for all embedding models. Finally, under matched conditions such as the same corpus, vocabulary, context window, and training time, GloVe outperforms word2vec. Overall, it achieves strong results on standard word similarity, named entity recognition, and word analogy benchmarks.
+
+\section{\textbf{ML Methods} \\ \textit{Which ML methods are used?}}
+GloVe learns word embeddings in an unsupervised way by fitting a log-bilinear regression model to word-context co-occurrence counts. Let $X_{ij}$ denote the number of times word $j$ occurs in the context of word $i$. GloVe seeks word vectors $w_i$ and context word vectors $\tilde{w}_j$ with biases $b_i$, $\tilde{b}_j$ such that
+
+\begin{equation}
+    w_i^\top \tilde{w}_j + b_i + \tilde{b}_j \approx \log(X_{ij}). 
+\end{equation}
+
+The parameters are learned by minimizing a weighted least-squares objective:
+
+\begin{equation}
+    J=\sum_{i,j=1}^V f(X_{ij})\Big(w_i^\top \tilde{w}_j + b_i + \tilde{b}_j - \log(X_{ij})\Big)^2,
+\end{equation}
+
+where $V$ is the size of the vocabulary and $f(\cdot)$ is the weighting function.
+
+The weighting function is required to satisfy:
+
+\begin{enumerate}
+    \item $f(0) = 0$, thus, training is carried out only on nonzero entries in the word-word co-occurrence matrix. If $f$ is taken to be continuous, it should vanish as $x \rightarrow 0$ fast enough that the limit \linebreak $\lim_{x \rightarrow 0} f(x) \cdot \log^2(x)$ exists and is finite.
+    \item $f(x)$ should be non-decreasing so that rare co-occurrences are not overweighted.
+    \item $f(x)$ should remain relatively small for large $x$, so that frequent co-occurrences are not overweighted.
+\end{enumerate}
+
+The authors report that a simple capped power-law weighting function meets these requirements and works well in practice:
+
+\begin{equation}
+    f(x)=
+    \begin{cases}
+    \, (x/x_{\max})^\alpha, & \text{if} \quad x < x_{\max},\\
+    \, 1, & \text{otherwise}.
+    \end{cases}
+\end{equation}
+
+As a result, the model outputs two sets of word vectors, $W$ and $\tilde{W}$. The final word embedding is obtained by adding the two representations, yielding $W + \tilde{W}$. When $X$ is symmetric, $W$ and $\tilde{W}$ are equivalent and differ only due to random initializations. 
+
+\section{\textbf{Innovation} \\ \textit{What is the main innovation of the paper?}}
+The paper's main innovation is to combine a global matrix factorization with local context-window learning to construct word embeddings with a meaningful linear structure. GloVe counts word-context co-occurrences using a sliding window, aggregates them into a global word-word co-occurrence matrix $X$, and then learns vectors whose dot products approximate $\log(X_{ij})$. It successfully produces a low-rank factorization of global co-occurrence information, while still being grounded in local context.
+
+\section{\textbf{Takeaways} \\ \textit{What are the takeaways?}}
+A key insight is that word vectors are learned more effectively by modeling ratios of co-occurrence probabilities rather than the probabilities themselves. In GloVe, given two target words $i$, $j$ and a context word $k$, we aim for
+
+\begin{equation}
+    (w_i - w_j)^\top \tilde{w}_k \approx \log\bigg(\frac{P_{ik}}{P_{jk}}\bigg).
+\end{equation}
+where $P_{ik} = P(k|i) = X_{ik}/X_i$ is the probability that word $k$ appears in the context of word $i$.
+
+This ratio has a natural interpretation: if $P_{ik}/P_{jk} \gg 1$, then $k$ is much more characteristic of $i$ than of $j$; if $P_{ik}/P_{jk} \approx 1$, then $k$ provides little evidence to distinguish $i$ from $j$; and if $P_{ik}/P_{jk} \ll 1$, then $k$ is more strongly associated with $j$. An example is shown in Table~\ref{tab:cooccurrence} adapted from \cite{glove2014}.
+
+\begin{table}[!htbp]
+\centering
+\renewcommand{\arraystretch}{1.2}
+\caption{Co-occurrence probabilities for target words \textit{ice} and \textit{steam} with selected context words.}
+\label{tab:cooccurrence}
+\resizebox{\columnwidth}{!}{%
+$\begin{array}{l|cccc}
+\textbf{Probability and Ratio} & k=\textit{solid} & k=\textit{gas} & k=\textit{water} & k=\textit{fashion} \\
+\hline
+P(k \mid \textit{ice})   & 1.9 \times 10^{-4} & 6.6 \times 10^{-5} & 3.0 \times 10^{-3} & 1.7 \times 10^{-5} \\
+P(k \mid \textit{steam}) & 2.2 \times 10^{-5} & 7.8 \times 10^{-4} & 2.2 \times 10^{-3} & 1.8 \times 10^{-5} \\
+P(k \mid \textit{ice})/P(k \mid \textit{steam})
+                         & 8.9                & 8.5 \times 10^{-2} & 1.36               & 0.96\\
+\hline
+\end{array}$%
+}
+\end{table}
+
+A second takeaway is that co-occurrence counts are not equally useful, so the training objective should include an explicit weighting scheme. Rare word-context pairs are often noisy, while very frequent pairs can dominate the loss. Methods like LSA assign a uniform weight to all matrix entries, which can overemphasize uninformative signals including zeros. An appropriate weighting function helps balance both extremes.
+
+\section{\textbf{Limitations} \\ \textit{What are possible problems of the approach?}}
+Firstly, GloVe embeddings are static: each word receives exactly one vector, so it cannot represent polysemy in a context-sensitive way. As a result, the learned vector tends to reflect whichever sense was most frequent in the training corpus. For example, "bank" may be biased toward "financial institution" or "riverbank" depending on which usage dominates the data. Secondly, it struggles with out-of-vocabulary words: if a token did not appear during training, the model cannot produce a meaningful embedding and falls back to an "unknown" representation. Finally, because GloVe relies on global co-occurrence statistics, it can miss finer, text-specific details that more locally trained methods like word2vec tend to capture better.
+
+\vspace{0.4em}
+
+\begingroup
+\small
+\setlength{\parskip}{0.35em}
+\begin{thebibliography}{9}
+\bibitem{glove2014} Pennington, J., Socher, R. and Manning, C. (2014), GloVe: Global Vectors for Word Representation. In \textit{Proceedings of the 2014 Conference on Empirical Methods in Natural Language Processing (EMNLP)}, 1532--1543, Doha, Qatar. Association for Computational Linguistics.
+\bibitem{deerwester1990} Deerwester, S., Dumais, S.T., Furnas, G.W., Landauer, T.K. and Harshman, R. (1990), Indexing by latent semantic analysis. J. Am. Soc. Inf. Sci., 41: 391-407. https://doi.org/10.1002/(SICI)1097-4571(199009)41:6<391::AID-ASI1>3.0.CO;2-9
+\bibitem{mikolov2013efficient}
+Mikolov, T., Chen, K., Corrado, G.S. and Dean, J. (2013), Efficient estimation of word representations in vector space. arXiv preprint arXiv:1301.3781.
+\bibitem{mikolov2013linguistic}
+Mikolov, T., Yih, W.-T. and Zweig, G. (2013), Linguistic regularities in continuous space word representations. In Proceedings of HLT-NAACL.
+
+\end{thebibliography}
+\endgroup
+
+\end{document}
